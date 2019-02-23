@@ -1,46 +1,58 @@
 package ru.sms.cloud.client;
 
 import javafx.application.Platform;
+import javafx.beans.binding.Bindings;
+import javafx.collections.ObservableList;
 import javafx.event.ActionEvent;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
+import javafx.scene.control.Button;
 import javafx.scene.control.ListView;
-import javafx.scene.control.TextField;
-import ru.sms.cloud.common.AbstractMessage;
-import ru.sms.cloud.common.FileMessage;
-import ru.sms.cloud.common.FileRequest;
+import ru.sms.cloud.common.*;
 
 import java.io.IOException;
 import java.net.URL;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
+import java.util.List;
 import java.util.ResourceBundle;
 
 public class MainController implements Initializable {
-    @FXML
-    TextField tfFileName;
+    public static final String CLIENT_STORAGE = "client_storage/";
 
     @FXML
-    ListView<String> filesList;
+    ListView<String> clFilesList;
+
+    @FXML
+    ListView<String> serverFilesList;
+
+    @FXML
+    Button upBtn;
+
+    @FXML
+    Button downBtn;
 
     @Override
     public void initialize(URL location, ResourceBundle resources) {
+        upBtn.disableProperty().bind(Bindings.size(clFilesList.getSelectionModel().getSelectedItems()).isEqualTo(0));
+        downBtn.disableProperty().bind(Bindings.size(serverFilesList.getSelectionModel().getSelectedItems()).isEqualTo(0));
         Network.start();
-//        new Thread(new Runnable() {
-//            @Override
-//            public void run() {
-//                NettyNetwork.getInstance().start();
-//            }
-//        }).start();
+
+        refreshFilesOnServer();
 
         Thread t = new Thread(() -> {
             try {
                 while (true) {
                     AbstractMessage am = Network.readObject();
+                    if (am instanceof FileListAnswer){
+                        FileListAnswer answer = (FileListAnswer) am;
+                        refreshFilesListFromServer(answer.getFileNames());
+                    }
                     if (am instanceof FileMessage) {
                         FileMessage fm = (FileMessage) am;
-                        Files.write(Paths.get("client_storage/" + fm.getFilename()), fm.getData(), StandardOpenOption.CREATE);
+                        Files.write(Paths.get(CLIENT_STORAGE + fm.getFilename()), fm.getData(), StandardOpenOption.CREATE);
                         refreshLocalFilesList();
                     }
                 }
@@ -55,34 +67,54 @@ public class MainController implements Initializable {
         refreshLocalFilesList();
     }
 
-    public void pressOnDownloadBtn(ActionEvent actionEvent) {
-        if (tfFileName.getLength() > 0) {
-            Network.sendMsg(new FileRequest(tfFileName.getText()));
-            tfFileName.clear();
-        }
+    public void refreshFilesOnServerAction(ActionEvent actionEvent){
+        refreshFilesOnServer();
     }
 
-//    public void pressOnSendData(ActionEvent actionEvent) {
-//        NettyNetwork.getInstance().sendData();
-//    }
+    private void refreshFilesOnServer() {
+        Network.sendMsg(new FileListRequest());
+    }
 
     public void refreshLocalFilesList() {
         if (Platform.isFxApplicationThread()) {
-            try {
-                filesList.getItems().clear();
-                Files.list(Paths.get("client_storage")).map(p -> p.getFileName().toString()).forEach(o -> filesList.getItems().add(o));
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        } else {
-            Platform.runLater(() -> {
+            getFileList();
+        }
+        else {
+            Platform.runLater(this::getFileList);
+        }
+    }
+
+    public void refreshFilesListFromServer(List<String> names) {
+        ObservableList<String> items = serverFilesList.getItems();
+        items.clear();
+        items.addAll(names);
+    }
+    private void getFileList() {
+        try {
+            clFilesList.getItems().clear();
+            Files.list(Paths.get(CLIENT_STORAGE)).map(p -> p.getFileName().toString()).forEach(o -> clFilesList.getItems().add(o));
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public void upBtnAction(ActionEvent actionEvent) {
+        ObservableList<String> selectedItems = clFilesList.getSelectionModel().getSelectedItems();
+        selectedItems.forEach(fileName -> {
+            Path path = Paths.get(CLIENT_STORAGE + fileName);
+            if (Files.exists(path)) {
                 try {
-                    filesList.getItems().clear();
-                    Files.list(Paths.get("client_storage")).map(p -> p.getFileName().toString()).forEach(o -> filesList.getItems().add(o));
+                    Network.sendMsg(new FileMessage(path));
                 } catch (IOException e) {
                     e.printStackTrace();
                 }
-            });
-        }
+            }
+        });
+        refreshFilesOnServer();
+    }
+
+    public void downBtnAction(ActionEvent actionEvent) {
+        ObservableList<String> selectedItems = serverFilesList.getSelectionModel().getSelectedItems();
+        selectedItems.forEach(fileName -> Network.sendMsg(new FileRequest(fileName)));
     }
 }

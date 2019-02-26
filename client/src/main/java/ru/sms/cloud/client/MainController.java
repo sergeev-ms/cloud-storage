@@ -2,6 +2,8 @@ package ru.sms.cloud.client;
 
 import javafx.application.Platform;
 import javafx.beans.binding.Bindings;
+import javafx.beans.value.ChangeListener;
+import javafx.beans.value.ObservableValue;
 import javafx.collections.ObservableList;
 import javafx.event.ActionEvent;
 import javafx.fxml.FXML;
@@ -9,6 +11,11 @@ import javafx.fxml.Initializable;
 import javafx.scene.control.Button;
 import javafx.scene.control.ListView;
 import ru.sms.cloud.common.*;
+import ru.sms.cloud.common.serverin.FileDeleteRequest;
+import ru.sms.cloud.common.serverin.FileListRequest;
+import ru.sms.cloud.common.serverin.FileRequest;
+import ru.sms.cloud.common.serverout.FileListAnswer;
+import ru.sms.cloud.common.serverout.FileMessage;
 
 import java.io.IOException;
 import java.net.URL;
@@ -20,7 +27,7 @@ import java.util.List;
 import java.util.ResourceBundle;
 
 public class MainController implements Initializable {
-    public static final String CLIENT_STORAGE = "client_storage/";
+    private static final String CLIENT_STORAGE = "client_storage/";
 
     @FXML
     ListView<String> clFilesList;
@@ -34,10 +41,23 @@ public class MainController implements Initializable {
     @FXML
     Button downBtn;
 
+    @FXML
+    Button removeOnServerBtn;
+
     @Override
     public void initialize(URL location, ResourceBundle resources) {
-        upBtn.disableProperty().bind(Bindings.size(clFilesList.getSelectionModel().getSelectedItems()).isEqualTo(0));
-        downBtn.disableProperty().bind(Bindings.size(serverFilesList.getSelectionModel().getSelectedItems()).isEqualTo(0));
+        upBtn.disableProperty().bind(
+                Bindings.size(clFilesList.getSelectionModel().getSelectedItems()).isEqualTo(0));
+        downBtn.disableProperty().bind(
+                Bindings.size(serverFilesList.getSelectionModel().getSelectedItems()).isEqualTo(0));
+        clFilesList.focusedProperty().addListener((observable, oldValue, newValue) -> {
+            if (oldValue != newValue && newValue)
+                serverFilesList.getSelectionModel().clearSelection();
+        });
+        serverFilesList.focusedProperty().addListener((observable, oldValue, newValue) -> {
+            if (oldValue != newValue && newValue)
+                clFilesList.getSelectionModel().clearSelection();
+        });
         Network.start();
 
         refreshFilesOnServer();
@@ -67,15 +87,16 @@ public class MainController implements Initializable {
         refreshLocalFilesList();
     }
 
-    public void refreshFilesOnServerAction(ActionEvent actionEvent){
+    public void refreshAllFilesAction(ActionEvent actionEvent){
         refreshFilesOnServer();
+        refreshLocalFilesList();
     }
 
     private void refreshFilesOnServer() {
         Network.sendMsg(new FileListRequest());
     }
 
-    public void refreshLocalFilesList() {
+    private void refreshLocalFilesList() {
         if (Platform.isFxApplicationThread()) {
             getFileList();
         }
@@ -84,15 +105,18 @@ public class MainController implements Initializable {
         }
     }
 
-    public void refreshFilesListFromServer(List<String> names) {
-        ObservableList<String> items = serverFilesList.getItems();
-        items.clear();
-        items.addAll(names);
+    private void refreshFilesListFromServer(List<String> names) {
+        Platform.runLater(() -> {
+            serverFilesList.getItems().clear();
+            serverFilesList.getItems().addAll(names);
+        });
     }
+
     private void getFileList() {
         try {
             clFilesList.getItems().clear();
-            Files.list(Paths.get(CLIENT_STORAGE)).map(p -> p.getFileName().toString()).forEach(o -> clFilesList.getItems().add(o));
+            Files.list(Paths.get(CLIENT_STORAGE)).map(p ->
+                    p.getFileName().toString()).forEach(o -> clFilesList.getItems().add(o));
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -110,11 +134,35 @@ public class MainController implements Initializable {
                 }
             }
         });
-        refreshFilesOnServer();
     }
 
     public void downBtnAction(ActionEvent actionEvent) {
         ObservableList<String> selectedItems = serverFilesList.getSelectionModel().getSelectedItems();
         selectedItems.forEach(fileName -> Network.sendMsg(new FileRequest(fileName)));
+    }
+
+    private void removeLocalFile(ObservableList<String> items) {
+        items.forEach(fileName -> {
+            Path path = Paths.get(CLIENT_STORAGE + fileName);
+            boolean exists = Files.exists(path);
+            if (exists) {
+                try {
+                    Files.delete(path);
+                    refreshLocalFilesList();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+        });
+    }
+
+    public void removeServerFilesAction(ActionEvent actionEvent) {
+        ObservableList<String> selectedServerItems = serverFilesList.getSelectionModel().getSelectedItems();
+        if (selectedServerItems.size() > 0)
+            selectedServerItems.forEach(fileName -> Network.sendMsg(new FileDeleteRequest(fileName)));
+        ObservableList<String> selectedClientItems = clFilesList.getSelectionModel().getSelectedItems();
+        if (selectedClientItems.size() > 0)
+            removeLocalFile(selectedClientItems);
+
     }
 }

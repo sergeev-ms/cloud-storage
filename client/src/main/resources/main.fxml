@@ -18,12 +18,13 @@
   </rowConstraints>
    <children>
       <ListView fx:id="clFilesList" prefHeight="200.0" prefWidth="Infinity"/>
-      <ListView fx:id="serverFilesList" prefHeight="200.0" prefWidth="Infinity" GridPane.columnIndex="2" />
+      <ListView fx:id="serverFilesList" prefHeight="200.0" prefWidth="Infinity" GridPane.columnIndex="2"/>
       <VBox prefHeight="200.0" prefWidth="100.0" GridPane.columnIndex="1" spacing="5">
          <children>
             <Button fx:id="upBtn" mnemonicParsing="false" text="Upload -&gt;" prefWidth="Infinity" onAction="#upBtnAction"/>
             <Button fx:id="downBtn" mnemonicParsing="false" text="&lt;- Download" prefWidth="Infinity" onAction="#downBtnAction"/>
-            <Button fx:id="refreshOnServer" mnemonicParsing="false" text="Refresh" prefWidth="Infinity" onAction="#refreshFilesOnServerAction"/>
+            <Button fx:id="refreshOnServer" mnemonicParsing="false" text="Refresh" prefWidth="Infinity" onAction="#refreshAllFilesAction"/>
+            <Button fx:id="removeOnServerBtn" mnemonicParsing="false" text="Remove" prefWidth="Infinity" onAction="#removeServerFilesAction"/>
          </children>
       </VBox>
    </children>

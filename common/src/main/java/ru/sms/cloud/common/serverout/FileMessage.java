@@ -1,4 +1,6 @@
-package ru.sms.cloud.common;
+package ru.sms.cloud.common.serverout;
+
+import ru.sms.cloud.common.AbstractMessage;
 
 import java.io.IOException;
 import java.nio.file.Files;

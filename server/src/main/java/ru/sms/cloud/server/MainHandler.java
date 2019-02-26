@@ -3,11 +3,13 @@ package ru.sms.cloud.server;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.util.ReferenceCountUtil;
-import ru.sms.cloud.common.FileListAnswer;
-import ru.sms.cloud.common.FileListRequest;
-import ru.sms.cloud.common.FileMessage;
-import ru.sms.cloud.common.FileRequest;
+import ru.sms.cloud.common.serverin.FileDeleteRequest;
+import ru.sms.cloud.common.serverout.FileListAnswer;
+import ru.sms.cloud.common.serverin.FileListRequest;
+import ru.sms.cloud.common.serverout.FileMessage;
+import ru.sms.cloud.common.serverin.FileRequest;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -17,7 +19,7 @@ import java.util.stream.Collectors;
 
 public class MainHandler extends ChannelInboundHandlerAdapter {
 
-    public static final String SERVER_STORAGE = "server_storage/";
+    private static final String SERVER_STORAGE = "server_storage/";
     private Path rootPath;
 
     @Override
@@ -36,16 +38,31 @@ public class MainHandler extends ChannelInboundHandlerAdapter {
                 }
             }
             if (msg instanceof FileListRequest) {
-                List<String> fileNamesList = Files.list(rootPath).map(path -> path.getFileName().toString()).collect(Collectors.toList());
-                ctx.writeAndFlush(new FileListAnswer(fileNamesList));
+                sendFileList(ctx);
             }
             if (msg instanceof FileMessage){
                 FileMessage fm = (FileMessage) msg;
                 Files.write(Paths.get(SERVER_STORAGE + fm.getFilename()), fm.getData(), StandardOpenOption.CREATE);
+                sendFileList(ctx);
+            }
+            if (msg instanceof FileDeleteRequest){
+                String filename = ((FileDeleteRequest) msg).getFilename();
+                Path path = Paths.get(SERVER_STORAGE + filename);
+                if (Files.exists(path)) {
+                    Files.delete(path);
+                    sendFileList(ctx);
+                }
+
             }
         } finally {
             ReferenceCountUtil.release(msg);
         }
+    }
+
+    private void sendFileList(ChannelHandlerContext ctx) throws IOException {
+        List<String> fileNamesList = Files.list(rootPath).map(path ->
+                path.getFileName().toString()).collect(Collectors.toList());
+        ctx.writeAndFlush(new FileListAnswer(fileNamesList));
     }
 
     @Override

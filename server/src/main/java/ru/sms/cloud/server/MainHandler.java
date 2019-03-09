@@ -10,8 +10,6 @@ import ru.sms.cloud.common.serverin.FileRequest;
 import ru.sms.cloud.common.serverout.AuthAnswer;
 import ru.sms.cloud.common.serverout.FileListAnswer;
 import ru.sms.cloud.common.serverout.FileMessage;
-import ru.sms.cloud.server.auth.Auth;
-import ru.sms.cloud.server.data.AuthHardImplementation;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -32,6 +30,7 @@ public class MainHandler extends ChannelInboundHandlerAdapter {
     private Path userPath;
     private boolean isAuth = false;
 
+
     @Override
     public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
         try {
@@ -42,8 +41,9 @@ public class MainHandler extends ChannelInboundHandlerAdapter {
                 String userName = authRequest.getUserName();
                 String pass = authRequest.getPass();
                 if (userName!=null && pass!=null) {
-                    Auth auth = new AuthHardImplementation();
-                    boolean tryAuth = auth.tryAuth(userName, pass);
+                    Database database = Database.INSTANCE;
+
+                    boolean tryAuth = database.tryAuth(userName, pass);
                     if (tryAuth) {
                         this.isAuth = true;
                         userPath = Paths.get(ROOT_SERVER_STORAGE + userName);
